@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import JSZip from "jszip";
-import { Download, FileText, Code, FolderArchive, ChevronDown } from "lucide-react";
+import { Download, FileText, Code, FolderArchive, ChevronDown, Cpu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ExportDropdownProps {
@@ -12,6 +12,7 @@ interface ExportDropdownProps {
 export default function ExportDropdown({ plan, nodes, dependencies }: ExportDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   const toggleOpen = () => setIsOpen(!isOpen);
 
@@ -306,6 +307,115 @@ export const ${nameClean} = ${jsonVal};
     }
   };
 
+  // Generate Master Prompt for Cursor/AI Agent
+  const handleCopyMasterPrompt = () => {
+    let prompt = `System Role: Act as an expert frontend engineer. Scaffold the complete application codebase in ${plan.settings?.framework === "nextjs" ? "Next.js (App Router)" : "React"} using Tailwind CSS. Follow clean code, proper typing, atomic design component folders, and export fully functional files.\n\n`;
+    
+    prompt += `=========================================\n`;
+    prompt += `PROJECT SPECIFICATION: ${plan.title}\n`;
+    prompt += `=========================================\n\n`;
+    prompt += `Brief Description:\n${plan.brief}\n\n`;
+    prompt += `Architecture Summary:\n${plan.settings?.briefSummary || ""}\n\n`;
+    
+    prompt += `=========================================\n`;
+    prompt += `FOLDER STRUCTURE TO USE:\n`;
+    prompt += `=========================================\n`;
+    if (plan.settings?.framework === "nextjs") {
+      prompt += `- app/ (page route components matching path metadata)\n`;
+    } else {
+      prompt += `- src/pages/ (SPA pages)\n`;
+    }
+    prompt += `- components/atoms/ (basic reusable buttons, inputs, labels, etc.)\n`;
+    prompt += `- components/molecules/ (combinations of atoms like cards, inputs with icons, tables)\n`;
+    prompt += `- components/organisms/ (complex modules like dashboards, tables with filters, graphs)\n`;
+    prompt += `- hooks/ (custom React hooks)\n`;
+    prompt += `- context/ (state providers)\n`;
+    prompt += `- types/ (TypeScript interfaces)\n`;
+    prompt += `- mocks/ (JSON/TS mock data structures)\n\n`;
+
+    prompt += `=========================================\n`;
+    prompt += `COMPONENTS, ROUTING, & DATA SECTIONS:\n`;
+    prompt += `=========================================\n\n`;
+
+    const pageNodes = nodes.filter((n) => n.type === "page");
+    pageNodes.forEach((page) => {
+      prompt += `### PAGE ROUTE: ${page.name}\n`;
+      prompt += `- **Path**: \`${page.metadata?.path || "/"}\`\n`;
+      prompt += `- **Description**: ${page.description || ""}\n`;
+      
+      const children = nodes.filter((n) => n.parent_id === page.id);
+      if (children.length > 0) {
+        prompt += `- **Decomposed Sub-Elements**:\n`;
+        children.forEach((child) => {
+          prompt += `  * **${child.name}** (${child.type.toUpperCase()})\n`;
+          prompt += `    - *Description*: ${child.description || ""}\n`;
+          if (child.type === "component") {
+            prompt += `    - *Atomic Level*: ${child.metadata?.atomicType || "component"}\n`;
+            if (child.metadata?.props && child.metadata.props.length > 0) {
+              prompt += `    - *Props*:\n`;
+              child.metadata.props.forEach((p: any) => {
+                prompt += `      - \`${p.name}: ${p.type}\` (${p.description})\n`;
+              });
+            }
+          } else if (child.type === "hook") {
+            prompt += `    - *Inputs*: ${child.metadata?.inputs || "None"}\n`;
+            prompt += `    - *Outputs*: ${child.metadata?.outputs || "None"}\n`;
+          } else if (child.type === "context") {
+            prompt += `    - *Context Shape*: ${child.metadata?.valueShape || ""}\n`;
+          } else if (child.type === "data_shape") {
+            prompt += `    - *TS Interface*:\n\`\`\`typescript\n${child.metadata?.tsInterface || ""}\n\`\`\`\n`;
+          } else if (child.type === "mock_data") {
+            prompt += `    - *Conforms to*: ${child.metadata?.dependsOn || ""}\n`;
+            prompt += `    - *Mock Data Sample*:\n${typeof child.metadata?.jsonData === "string" ? child.metadata.jsonData : JSON.stringify(child.metadata?.jsonData || [], null, 2)}\n`;
+          }
+          
+          // Dependencies
+          const childDeps = dependencies.filter((d) => d.source_node_id === child.id);
+          if (childDeps.length > 0) {
+            const depList = childDeps.map((d) => {
+              const targetNode = nodes.find((n) => n.id === d.target_node_id);
+              return targetNode ? `\`${targetNode.name}\` (${d.dependency_type})` : "";
+            }).filter(Boolean);
+            prompt += `    - *Dependencies*: ${depList.join(", ")}\n`;
+          }
+        });
+      }
+      prompt += `\n-----------------------------------------\n\n`;
+    });
+
+    const libNodes = nodes.filter((n) => n.type === "lib");
+    if (libNodes.length > 0) {
+      prompt += `=========================================\n`;
+      prompt += `REQUIRED THIRD-PARTY LIBRARIES:\n`;
+      prompt += `=========================================\n`;
+      libNodes.forEach((lib) => {
+        prompt += `- **${lib.name}**: ${lib.description || ""}\n`;
+      });
+      prompt += `\n`;
+    }
+
+    prompt += `=========================================\n`;
+    prompt += `STEP-BY-STEP IMPLEMENTATION INSTRUCTIONS FOR AI AGENT:\n`;
+    prompt += `=========================================\n`;
+    prompt += `1. Create all Types/Interfaces first in types/ directory.\n`;
+    prompt += `2. Create Mock Data modules in mocks/ folder for styling/testing.\n`;
+    prompt += `3. Set up Context State Providers in context/ and custom React hooks in hooks/.\n`;
+    prompt += `4. Scaffold Atoms (lowest-level components) using mock data and mock contexts if needed.\n`;
+    prompt += `5. Combine Atoms to create Molecules.\n`;
+    prompt += `6. Assemble Molecules and Hooks to build Organisms.\n`;
+    prompt += `7. Finally, integrate the Organisms inside page routing files to form the final routes.\n`;
+    prompt += `8. Style using Tailwind CSS classes with modern HSL tailwind conventions.\n`;
+    prompt += `9. Ensure all imports are correctly relative or match project alias conventions (e.g. '@/*').\n\n`;
+    prompt += `Please generate the complete codebase step-by-step now.`;
+
+    navigator.clipboard.writeText(prompt);
+    setCopiedPrompt(true);
+    setTimeout(() => {
+      setCopiedPrompt(false);
+      setIsOpen(false);
+    }, 1500);
+  };
+
   return (
     <div className="relative">
       <Button
@@ -322,6 +432,16 @@ export const ${nameClean} = ${jsonVal};
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
           <div className="absolute right-0 mt-2 w-56 rounded-xl border border-border bg-card shadow-2xl p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+            <button
+              onClick={handleCopyMasterPrompt}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg text-left transition-colors cursor-pointer"
+            >
+              <Cpu className="h-4 w-4 text-amber-500" />
+              {copiedPrompt ? "Master Prompt Copied!" : "Copy AI Master Prompt"}
+            </button>
+            
+            <div className="h-px bg-border my-1" />
+
             <button
               onClick={handleExportMarkdown}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg text-left transition-colors cursor-pointer"

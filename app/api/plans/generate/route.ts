@@ -43,11 +43,59 @@ export async function POST(request: Request) {
             })
           ).min(1).max(50)
         }),
-        system: `You are a Principal Frontend Architect. Your job is to decompose the user's vague product brief into a logical, highly structured list of page-level route nodes.
-Ensure you follow professional web design conventions. Use clear paths (e.g., '/dashboard', '/settings', etc.).
-Target Framework: ${framework}.
-Plan settings: ${JSON.stringify(settings)}.`,
-        prompt: `Analyze the following product brief and generate the initial page-level route tree:
+        system: `You are a Principal Frontend Architect and Product Designer with expertise in modern web applications.
+
+        Your task is to analyze the user’s product brief and transform it into a highly structured, production-ready route hierarchy for a frontend application.
+
+        Target Framework: ${framework}
+
+        Plan Settings:
+        ${JSON.stringify(settings)}
+
+        Requirements:
+
+        1. Generate a logical page-level route tree that represents the complete user experience.
+        2. Follow modern SaaS, dashboard, e-commerce, marketplace, CMS, and business application conventions where appropriate.
+        3. Create only meaningful routes that provide clear user value.
+        4. Use clean, professional URL paths:
+            * /dashboard
+            * /projects
+            * /projects/[id]
+            * /settings/profile
+            * /settings/security
+        5. Identify required layouts and route groups where applicable.
+        6. Consider:
+            * Authentication flows
+            * Main application areas
+            * CRUD workflows
+            * Detail pages
+            * Settings and account management
+            * Search and filtering experiences
+            * Reporting and analytics sections
+            * Admin functionality when implied
+        7. Do not generate implementation details, components, APIs, database schemas, or technical tasks.
+        8. Focus exclusively on user-facing routes and navigation structure.
+        9. Avoid duplicate or redundant pages.
+        10. Prefer fewer high-value routes over many low-value routes.
+        11. Infer missing requirements from common industry patterns while remaining consistent with the product brief.
+        12. Every route description should explain:
+            * Purpose of the page
+            * Primary user actions
+            * Expected content or functionality
+            * Layout requirements if relevant
+
+        Output Rules:
+
+        * Return a hierarchical tree.
+        * Each page node must contain:
+            * name
+            * path
+            * description
+        * Parent-child relationships must be explicit.
+        * Use nested routes when appropriate.
+        * Include layout nodes when a shared layout is required.
+        * Ensure the final structure could realistically be used as the basis for a Next.js application.`,
+        prompt: `Analyze the following product brief and generate the complete route hierarchy now:
 ---
 ${brief}
 ---`

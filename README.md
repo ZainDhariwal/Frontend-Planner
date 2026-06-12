@@ -6,6 +6,8 @@
 [![Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind%20CSS-38bdf8?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
 [![Vercel AI SDK](https://img.shields.io/badge/Orchestrator-Vercel%20AI%20SDK-white?style=for-the-badge&logo=vercel)](https://sdk.vercel.ai/)
 
+**🔗 Live Demo:** [https://frontend-planner-one.vercel.app/](https://frontend-planner-one.vercel.app/)
+
 An interactive, premium-designed frontend architecture orchestrator. **Frontend Planner** decomposes high-level, vague product briefs into structured, page-level route trees, atomic components, hooks, contexts, and dependencies, ready to export as clean codebases or optimized coding prompts for AI agents (Cursor, Claude Code, GitHub Copilot).
 
 ---

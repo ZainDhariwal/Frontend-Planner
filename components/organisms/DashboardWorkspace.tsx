@@ -376,10 +376,10 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
         {/* Left Panel: Plan Sidebar */}
         <aside className="w-80 border-r border-border bg-card/30 backdrop-blur-md p-4 flex flex-col gap-4 shrink-0">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Saved Projects</span>
+            <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-widest">Saved Projects</span>
             <button
               onClick={() => setShowNewPlanForm(!showNewPlanForm)}
-              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-border text-zinc-500 dark:text-zinc-300 hover:text-zinc-800 dark:hover:text-white rounded-lg transition-all cursor-pointer"
+              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-border text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white rounded-lg transition-all cursor-pointer"
               title="New plan"
             >
               <Plus className="h-4 w-4" />
@@ -390,35 +390,35 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
           {showNewPlanForm && (
             <form onSubmit={handleCreatePlan} className="border border-border bg-card/60 p-4 rounded-xl space-y-3 animate-in slide-in-from-top duration-200 shadow-sm">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase">Project Title</label>
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase">Project Title</label>
                 <input
                   type="text"
                   placeholder="e.g. Developer Portfolio"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full border border-border bg-background rounded-lg px-3 py-1.5 text-xs outline-none focus:border-blue-500 dark:focus:border-zinc-700 text-foreground transition-colors"
+                  className="w-full border border-border bg-background rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue-500 dark:focus:border-zinc-700 text-zinc-800 dark:text-zinc-100 transition-colors"
                   required
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase">Product Brief</label>
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase">Product Brief</label>
                 <textarea
                   placeholder="Describe the application features and requirements..."
                   value={newBrief}
                   onChange={(e) => setNewBrief(e.target.value)}
                   rows={4}
-                  className="w-full border border-border bg-background rounded-lg px-3 py-1.5 text-xs outline-none focus:border-blue-500 dark:focus:border-zinc-700 text-foreground transition-colors resize-none"
+                  className="w-full border border-border bg-background rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue-500 dark:focus:border-zinc-700 text-zinc-800 dark:text-zinc-100 transition-colors resize-none"
                   required
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase">Target Framework</label>
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase">Target Framework</label>
                 <select
                   value={newFramework}
                   onChange={(e) => setNewFramework(e.target.value)}
-                  className="w-full border border-border bg-background rounded-lg px-2.5 py-1.5 text-xs text-foreground outline-none cursor-pointer"
+                  className="w-full border border-border bg-background rounded-lg px-2.5 py-1.5 text-sm text-zinc-800 dark:text-zinc-100 outline-none cursor-pointer"
                 >
                   <option value="nextjs">Next.js (App Router)</option>
                   <option value="react">React (SPA Boilerplate)</option>
@@ -448,12 +448,12 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
           {/* Plan Navigation List */}
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
             {loadingPlans ? (
-              <div className="flex flex-col items-center justify-center py-12 text-zinc-400 dark:text-zinc-500 gap-2">
+              <div className="flex flex-col items-center justify-center py-12 text-zinc-600 dark:text-zinc-400 gap-2">
                 <Spinner size="sm" />
                 <span className="text-xs">Loading plans...</span>
               </div>
             ) : plans.length === 0 ? (
-              <div className="text-center py-12 border border-dashed border-border rounded-xl text-zinc-400 dark:text-zinc-500 text-xs">
+              <div className="text-center py-12 border border-dashed border-border rounded-xl text-zinc-600 dark:text-zinc-400 text-xs">
                 No plans generated yet. Click + to start.
               </div>
             ) : (
@@ -469,12 +469,12 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                         : "bg-card/40 border-border hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-muted/40"
                     }`}
                   >
-                    <div className={`font-semibold text-xs truncate ${isActive ? "text-blue-500 dark:text-blue-400" : "text-foreground"}`}>
+                    <div className={`font-bold text-sm truncate ${isActive ? "text-blue-500 dark:text-blue-400" : "text-zinc-800 dark:text-zinc-100"}`}>
                       {p.title}
                     </div>
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate mt-1">{p.brief}</p>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 font-semibold truncate mt-1">{p.brief}</p>
                     
-                    <div className="flex items-center justify-between mt-2.5 border-t border-border pt-2 text-[9px] text-zinc-400 dark:text-zinc-500 font-medium">
+                    <div className="flex items-center justify-between mt-2.5 border-t border-border pt-2 text-[11px] text-zinc-600 dark:text-zinc-400 font-bold">
                       <span className="flex items-center gap-1">
                         <BookOpen className="h-3 w-3" />
                         {p.settings?.framework === "nextjs" ? "Next.js" : "React"}

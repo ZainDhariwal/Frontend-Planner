@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { NodeIcon } from "@/components/atoms/NodeIcon";
 import { Badge } from "@/components/atoms/Badge";
 import CanvasResizeHandle from "./CanvasResizeHandle";
+import { Trash2 } from "lucide-react";
 
 interface CanvasNodeProps {
   node: any;
@@ -10,6 +11,7 @@ interface CanvasNodeProps {
   onResizeStart: (e: React.MouseEvent, direction: "se" | "e" | "s") => void;
   onRename: (newName: string) => void;
   readOnly?: boolean;
+  onDelete?: (e: React.MouseEvent) => void;
 }
 
 export default function CanvasNode({
@@ -18,7 +20,8 @@ export default function CanvasNode({
   onSelect,
   onResizeStart,
   onRename,
-  readOnly = false
+  readOnly = false,
+  onDelete
 }: CanvasNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempName, setTempName] = useState(node.name || "");
@@ -124,9 +127,23 @@ export default function CanvasNode({
             </div>
           )}
           
-          <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border border-current/10 shrink-0 select-none ${style.badge}`}>
-            {type}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!readOnly && onDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(e);
+                }}
+                className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded transition-all cursor-pointer"
+                title="Delete component"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            )}
+            <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border border-current/10 shrink-0 select-none ${style.badge}`}>
+              {type}
+            </span>
+          </div>
         </div>
 
         <p className="text-[10px] text-muted-foreground leading-normal line-clamp-3 select-none">

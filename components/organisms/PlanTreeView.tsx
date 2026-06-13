@@ -152,9 +152,7 @@ export default function PlanTreeView({
                         </span>
                         <button
                           onClick={() => {
-                            if (confirm("Are you sure you want to re-decompose this page? This will overwrite existing child components for this page.")) {
-                              onDecomposePage && onDecomposePage(page.id);
-                            }
+                            onDecomposePage && onDecomposePage(page.id);
                           }}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-all cursor-pointer"
                           title="Re-decompose (overwrite)"

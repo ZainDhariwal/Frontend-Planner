@@ -13,6 +13,7 @@ interface VisualCanvasProps {
   selectedNodeId: string | null;
   onRefreshWorkspace: () => void;
   readOnly?: boolean;
+  onDeleteNode?: (id: string) => void;
 }
 
 export default function VisualCanvas({
@@ -22,7 +23,8 @@ export default function VisualCanvas({
   onSelectNode,
   selectedNodeId,
   onRefreshWorkspace,
-  readOnly = false
+  readOnly = false,
+  onDeleteNode
 }: VisualCanvasProps) {
   const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(100);
@@ -399,6 +401,7 @@ export default function VisualCanvas({
           setPanY={setPanY}
           setZoom={setZoom}
           readOnly={readOnly}
+          onDeleteNode={onDeleteNode}
         />
 
         {/* Floating Controller widgets */}

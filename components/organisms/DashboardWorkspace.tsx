@@ -58,6 +58,14 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
     description: string;
     onConfirm: () => void;
   } | null>(null);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    confirmText?: string;
+    onConfirm: () => void;
+  } | null>(null);
   
   // History states
   const [undoStack, setUndoStack] = useState<Array<{ nodes: any[]; dependencies: any[] }>>([]);
@@ -526,6 +534,62 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
     }
   };
 
+  // 5.5. Handle node deletion (manual)
+  const handleDeleteNode = (nodeId: string) => {
+    const targetNode = nodes.find((n) => n.id === nodeId);
+    if (!targetNode) return;
+
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Planning Node",
+      description: `Are you sure you want to delete "${targetNode.name}"? This will permanently remove it along with all nested sub-components and dependency links.`,
+      confirmText: "Delete",
+      onConfirm: async () => {
+        try {
+          // Save state for undo/redo before modification
+          setUndoStack((prev) => [...prev, { nodes: [...nodes], dependencies: [...dependencies] }]);
+          setRedoStack([]);
+
+          // Perform DB deletion
+          const { error } = await supabase
+            .from("plan_nodes")
+            .delete()
+            .eq("id", nodeId);
+
+          if (error) throw error;
+
+          // Compute descendants to remove locally
+          const getDescendantIds = (parentId: string, allNodes: any[]): string[] => {
+            const children = allNodes.filter((n) => n.parent_id === parentId);
+            return [
+              parentId,
+              ...children.flatMap((child) => getDescendantIds(child.id, allNodes))
+            ];
+          };
+
+          const idsToDelete = new Set(getDescendantIds(nodeId, nodes));
+
+          // Update local state
+          const updatedNodes = nodes.filter((n) => !idsToDelete.has(n.id));
+          const updatedDeps = dependencies.filter(
+            (d) => !idsToDelete.has(d.source_node_id) && !idsToDelete.has(d.target_node_id)
+          );
+
+          setNodes(updatedNodes);
+          setDependencies(updatedDeps);
+
+          // Reset activeNode if it was deleted
+          if (activeNode && idsToDelete.has(activeNode.id)) {
+            setActiveNode(null);
+          }
+        } catch (err: any) {
+          console.error("Failed to delete node:", err);
+          alert(`Failed to delete node: ${err.message}`);
+        }
+      }
+    });
+  };
+
   const handleSignOut = async () => {
     try {
       setSignOutLoading(true);
@@ -805,6 +869,7 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                   selectedNodeId={activeNode?.id || null}
                   onRefreshWorkspace={() => handleSelectPlan(activePlan, true)}
                   readOnly={false}
+                  onDeleteNode={handleDeleteNode}
                 />
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-center gap-4 py-24">
@@ -846,6 +911,7 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                 readOnly={false}
                 onNodeUpdated={handleNodeUpdated}
                 onClose={() => setActiveNode(null)}
+                onDeleteNode={handleDeleteNode}
               />
             ) : (
               <div className="p-4 overflow-y-auto">
@@ -950,6 +1016,43 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                 className="bg-blue-600 hover:bg-blue-500 text-white text-xs h-9 px-4 cursor-pointer font-semibold shadow-lg shadow-blue-500/10"
               >
                 Yes, Use Free Version
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      {confirmDialog && confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+            onClick={() => setConfirmDialog(null)} 
+          />
+          <div className="relative border border-red-500/20 bg-card p-6 rounded-2xl w-full max-w-md shadow-2xl z-10 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="font-bold text-lg text-red-500 dark:text-red-400 flex items-center gap-2 mb-2">
+              <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400" />
+              {confirmDialog.title}
+            </h3>
+            <p className="text-xs text-muted-foreground leading-relaxed mb-6 font-medium">
+              {confirmDialog.description}
+            </p>
+            <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+              <Button 
+                onClick={() => setConfirmDialog(null)} 
+                variant="ghost" 
+                className="text-muted-foreground hover:text-foreground text-xs h-9 px-4 cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                  setConfirmDialog(null);
+                }}
+                className="bg-red-600 hover:bg-red-500 text-white text-xs h-9 px-4 cursor-pointer font-semibold shadow-lg shadow-red-500/10"
+              >
+                {confirmDialog.confirmText || "Confirm"}
               </Button>
             </div>
           </div>

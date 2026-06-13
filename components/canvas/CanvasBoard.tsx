@@ -18,6 +18,7 @@ interface CanvasBoardProps {
   setPanY: React.Dispatch<React.SetStateAction<number>>;
   setZoom: React.Dispatch<React.SetStateAction<number>>;
   readOnly?: boolean;
+  onDeleteNode?: (id: string) => void;
 }
 
 export default function CanvasBoard({
@@ -34,7 +35,8 @@ export default function CanvasBoard({
   setPanX,
   setPanY,
   setZoom,
-  readOnly = false
+  readOnly = false,
+  onDeleteNode
 }: CanvasBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
   
@@ -330,6 +332,7 @@ export default function CanvasBoard({
                 onResizeStart={(e, dir) => handleNodeResizeStart(e, node, dir)}
                 onRename={(newName) => onRenameNode(node.id, newName)}
                 readOnly={readOnly}
+                onDelete={() => onDeleteNode && onDeleteNode(node.id)}
               />
             </div>
           );

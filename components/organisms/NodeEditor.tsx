@@ -25,6 +25,7 @@ interface NodeEditorProps {
   readOnly?: boolean;
   onNodeUpdated: (updatedNode: any) => void;
   onClose: () => void;
+  onDeleteNode?: (id: string) => void;
 }
 
 export default function NodeEditor({ 
@@ -33,7 +34,8 @@ export default function NodeEditor({
   framework = "nextjs", 
   readOnly = false, 
   onNodeUpdated, 
-  onClose 
+  onClose,
+  onDeleteNode
 }: NodeEditorProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -566,19 +568,29 @@ export default function NodeEditor({
 
         {!readOnly && (
           <>
-            {/* Local Save Changes Button */}
-            <Button
-              onClick={handleSave}
-              disabled={saveLoading}
-              className="w-full bg-muted hover:bg-accent text-foreground border border-border text-xs font-semibold h-8 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              {saveLoading ? (
-                <div className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Save className="h-3.5 w-3.5" />
-              )}
-              Save local details
-            </Button>
+            {/* Local Save / Delete Actions Row */}
+            <div className="flex gap-2">
+              <Button
+                onClick={handleSave}
+                disabled={saveLoading}
+                className="flex-1 bg-muted hover:bg-accent text-foreground border border-border text-xs font-semibold h-8 rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                {saveLoading ? (
+                  <div className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                Save local details
+              </Button>
+              <Button
+                onClick={() => onDeleteNode && onDeleteNode(node.id)}
+                variant="ghost"
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-600 border border-red-500/20 text-xs font-semibold h-8 w-10 p-0 rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+                title="Delete node"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
 
             {/* Status approval workflow */}
             <div className="border-t border-border pt-4 space-y-2">

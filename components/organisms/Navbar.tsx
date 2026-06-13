@@ -1,12 +1,13 @@
 import React from "react";
 import { User } from "@supabase/supabase-js";
-import { LayoutDashboard, LogOut, Settings, Sun, Moon } from "lucide-react";
+import { LayoutDashboard, LogOut, Settings, Sun, Moon, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface NavbarProps {
   user: User;
   onSignOut: () => void;
   onOpenSettings: () => void;
+  onOpenCostDashboard: () => void;
   signOutLoading: boolean;
   theme: "light" | "dark";
   onToggleTheme: () => void;
@@ -16,6 +17,7 @@ export default function Navbar({
   user, 
   onSignOut, 
   onOpenSettings, 
+  onOpenCostDashboard,
   signOutLoading,
   theme,
   onToggleTheme
@@ -48,6 +50,16 @@ export default function Navbar({
           )}
           <span className="text-xs text-muted-foreground font-medium max-w-[120px] truncate">{userName}</span>
         </div>
+
+        {/* Cost & Token Analytics Dashboard Button */}
+        <Button
+          onClick={onOpenCostDashboard}
+          variant="ghost"
+          className="h-8 w-8 p-0 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer transition-colors"
+          title="Cost & Usage Dashboard"
+        >
+          <BarChart3 className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
+        </Button>
 
         {/* Theme Toggle Button */}
         <Button

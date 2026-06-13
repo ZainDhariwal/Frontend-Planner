@@ -179,14 +179,21 @@ export async function generateObjectWithFallback(
         model: attempt.modelInstance,
       });
 
-      const cost = attempt.keyType === "system"
-        ? 0
-        : calculateCost(
-            provider,
-            attempt.modelName,
-            result.usage.inputTokens,
-            result.usage.outputTokens
-          );
+      const usage = result.usage as any;
+      const inputTokens = usage?.inputTokens ?? usage?.promptTokens ?? 0;
+      const outputTokens = usage?.outputTokens ?? usage?.completionTokens ?? 0;
+
+      const cost = calculateCost(
+        provider,
+        attempt.modelName,
+        inputTokens,
+        outputTokens
+      );
+
+      console.log(
+        `[LLM Orchestrator] Success! Model: ${attempt.modelName} (${attempt.keyType} key). ` +
+        `Tokens: ${inputTokens} In / ${outputTokens} Out. Calculated Cost: $${cost}`
+      );
 
       return {
         object: result.object,

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const customApiKey = request.headers.get("x-api-key");
 
     // 4. Generate structured page tree using dynamic model failover chain
-    const { object, cost: generatedCost } = await generateObjectWithFallback(
+    const { object, cost: generatedCost, usage, modelUsed, keyTypeUsed } = await generateObjectWithFallback(
       provider,
       customApiKey,
       {
@@ -124,6 +124,17 @@ ${brief}
       console.error("Supabase plans insertion error:", planError);
       return NextResponse.json({ error: "Failed to create project plan in database" }, { status: 500 });
     }
+
+    // 6.5 Save LLM Usage Log
+    await supabase.from("llm_usage_logs").insert({
+      plan_id: plan.id,
+      model_name: modelUsed || provider,
+      key_type: keyTypeUsed || "unknown",
+      input_tokens: usage?.inputTokens ?? usage?.promptTokens ?? 0,
+      output_tokens: usage?.outputTokens ?? usage?.completionTokens ?? 0,
+      cost: generatedCost,
+      action_type: "generate"
+    });
 
     // 7. Save page nodes to public.plan_nodes
     const nodesToInsert = (object as any).pages.map((page: any) => ({

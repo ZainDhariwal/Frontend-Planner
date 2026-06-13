@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     const customApiKey = request.headers.get("x-api-key");
 
     // 4. Generate structured child nodes using model failover chain
-    const { object: rawObject, cost: generatedCost } = await generateObjectWithFallback(
+    const { object: rawObject, cost: generatedCost, usage, modelUsed, keyTypeUsed } = await generateObjectWithFallback(
       provider,
       customApiKey,
       {
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
           ).default([]),
           hooks: z.array(
             z.object({
-              name: z.string().describe("Standard react custom hook name starting with 'use', e.g. 'useTickets', 'useFilter'"),
+              name: z.string().describe("Standard react custom hook or Vue composable name starting with 'use', e.g. 'useTickets', 'useFilter'"),
               description: z.string().describe("What logic the hook handles (e.g. pagination, fetching tickets, local state)"),
               inputs: z.string().describe("Parameters representing inputs to the hook with types"),
               outputs: z.string().describe("Deconstructed returned values/functions with types"),
@@ -72,9 +72,9 @@ export async function POST(request: Request) {
           ).default([]),
           contexts: z.array(
             z.object({
-              name: z.string().describe("Context provider name ending with 'Context', e.g., 'AuthContext', 'TicketContext'"),
-              description: z.string().describe("State stored in the context and why it is scoped globally/locally"),
-              valueShape: z.string().describe("TypeScript interface/shape of the context value")
+              name: z.string().describe("Context provider or global store name, e.g., 'AuthContext', 'useTicketStore'"),
+              description: z.string().describe("State stored in the context/store and why it is scoped globally/locally"),
+              valueShape: z.string().describe("TypeScript interface/shape of the store or context value")
             })
           ).default([]),
           dataShapes: z.array(
@@ -105,12 +105,27 @@ export async function POST(request: Request) {
             })
           ).default([])
         }),
-        system: `You are a Principal Frontend Architect. Your job is to decompose the page node '${nodeName}' (path: '${nodePath}', description: '${nodeDescription}') into its required children components following strict atomic design guidelines:
-- Atoms (pure elements like buttons, inputs, badges)
-- Molecules (combined atoms like search bars, card stats)
-- Organisms (independent components like navigation bars, tables with filters)
-Also extract the required custom hooks, context providers, data shapes, mock data, assets, and libraries.
-Target Framework: ${framework}.
+        system: `You are a Principal Frontend Architect. Your job is to decompose the page node '${nodeName}' (path: '${nodePath}', description: '${nodeDescription}') into its required children elements.
+${
+  framework === "vue"
+    ? `Target Framework: Vue (Nuxt / Atomic).
+Decompose it into:
+- Components (Vue single-file components (.vue) using script setup syntax <script setup lang="ts"> and Tailwind CSS, structured as atoms, molecules, or organisms)
+- Hooks (Custom composables e.g. 'useTickets.ts' handling local/reactive state)
+- Contexts (Pinia stores e.g. 'useTicketStore.ts' or Vue provide/inject for global state)`
+    : framework === "svelte"
+    ? `Target Framework: Svelte (SvelteKit / Atomic).
+Decompose it into:
+- Components (Svelte components (.svelte) using Svelte 5 Runes ($state, $derived, $props) or Svelte stores and Tailwind CSS, structured as atoms, molecules, or organisms)
+- Hooks (Svelte helper/composable functions)
+- Contexts (Svelte writable stores or context modules using setContext/getContext)`
+    : `Target Framework: ${framework === "react" ? "React (SPA)" : "Next.js (App Router)"}.
+Decompose it into:
+- Components (React components structured as atoms, molecules, or organisms using Tailwind CSS)
+- Hooks (React custom hooks starting with 'use')
+- Contexts (React Context providers ending with 'Context')`
+}
+Also extract the required data shapes (TypeScript interfaces), mock data (conforming JSON), assets, and libraries.
 Be precise, highly technical, and production-ready. Ensure dependsOn values match the names of items generated.`,
         prompt: `Decompose the page node '${nodeName}' into its structural details and dependencies.${
           instruction && instruction.trim() !== ""
@@ -149,6 +164,18 @@ Be precise, highly technical, and production-ready. Ensure dependsOn values matc
       const currentCost = Number(currentPlan?.total_cost || 0);
       await supabase.from("plans").update({ total_cost: currentCost + generatedCost }).eq("id", planId);
     }
+
+    // 5.5 Save LLM Usage Log
+    await supabase.from("llm_usage_logs").insert({
+      plan_id: planId,
+      node_id: nodeId,
+      model_name: modelUsed || provider,
+      key_type: keyTypeUsed || "unknown",
+      input_tokens: usage?.inputTokens ?? usage?.promptTokens ?? 0,
+      output_tokens: usage?.outputTokens ?? usage?.completionTokens ?? 0,
+      cost: generatedCost,
+      action_type: "decompose"
+    });
 
     // 6. Bulk prepare plan nodes to insert
     const nodesToInsert: any[] = [];

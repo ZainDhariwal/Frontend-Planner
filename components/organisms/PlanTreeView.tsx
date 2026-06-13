@@ -9,8 +9,9 @@ interface PlanTreeViewProps {
   nodes: any[];
   activeNodeId: string | null;
   onSelectNode: (node: any) => void;
-  onDecomposePage: (pageId: string) => void;
-  decomposingMap: Record<string, boolean>;
+  onDecomposePage?: (pageId: string) => void;
+  decomposingMap?: Record<string, boolean>;
+  readOnly?: boolean;
 }
 
 export default function PlanTreeView({
@@ -19,7 +20,8 @@ export default function PlanTreeView({
   activeNodeId,
   onSelectNode,
   onDecomposePage,
-  decomposingMap
+  decomposingMap = {},
+  readOnly = false
 }: PlanTreeViewProps) {
   const [expandedPages, setExpandedPages] = useState<Record<string, boolean>>({});
 
@@ -122,14 +124,22 @@ export default function PlanTreeView({
 
                   {/* Actions / Status Indicators */}
                   <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {isDecomposing ? (
+                    {readOnly ? (
+                      hasChildren && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-full font-medium">
+                            {children.length} Elements
+                          </span>
+                        </div>
+                      )
+                    ) : isDecomposing ? (
                       <div className="flex items-center gap-2 text-xs text-blue-500 dark:text-blue-400 font-semibold">
                         <Spinner size="sm" />
                         Decomposing...
                       </div>
                     ) : !hasChildren ? (
                       <button
-                        onClick={() => onDecomposePage(page.id)}
+                        onClick={() => onDecomposePage && onDecomposePage(page.id)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 text-xs font-semibold tracking-wide transition-all cursor-pointer shadow-sm"
                       >
                         <Sparkles className="h-3.5 w-3.5" />
@@ -143,7 +153,7 @@ export default function PlanTreeView({
                         <button
                           onClick={() => {
                             if (confirm("Are you sure you want to re-decompose this page? This will overwrite existing child components for this page.")) {
-                              onDecomposePage(page.id);
+                              onDecomposePage && onDecomposePage(page.id);
                             }
                           }}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-all cursor-pointer"

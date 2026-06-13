@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { 
@@ -12,7 +12,9 @@ import {
   Calendar,
   AlertCircle,
   FolderOpen,
-  ChevronRight
+  ChevronRight,
+  Undo2,
+  Redo2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Navbar from "./Navbar";
@@ -21,6 +23,8 @@ import PlanTreeView from "./PlanTreeView";
 import NodeEditor from "./NodeEditor";
 import CoherencePanel from "./CoherencePanel";
 import ExportDropdown from "../molecules/ExportDropdown";
+import ShareButton from "../molecules/ShareButton";
+import CostDashboardModal from "./CostDashboardModal";
 import { CostIndicator } from "../molecules/CostIndicator";
 import { Spinner } from "@/components/atoms/Spinner";
 
@@ -42,6 +46,7 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [decomposingMap, setDecomposingMap] = useState<Record<string, boolean>>({});
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isCostDashboardOpen, setIsCostDashboardOpen] = useState(false);
   const [showNewPlanForm, setShowNewPlanForm] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [redecomposeNode, setRedecomposeNode] = useState<any | null>(null);
@@ -52,6 +57,10 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
     onConfirm: () => void;
   } | null>(null);
   
+  // History states
+  const [undoStack, setUndoStack] = useState<Array<{ nodes: any[]; dependencies: any[] }>>([]);
+  const [redoStack, setRedoStack] = useState<Array<{ nodes: any[]; dependencies: any[] }>>([]);
+
   // Form states
   const [newTitle, setNewTitle] = useState("");
   const [newBrief, setNewBrief] = useState("");
@@ -90,6 +99,156 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
     }
   };
 
+  const syncStateToDatabase = async (targetNodes: any[], targetDependencies: any[]) => {
+    if (!activePlan) return;
+    try {
+      // Fetch DB current state
+      const { data: dbNodes } = await supabase.from("plan_nodes").select("id").eq("plan_id", activePlan.id);
+      const { data: dbDeps } = await supabase.from("plan_node_dependencies").select("id").eq("plan_id", activePlan.id);
+
+      const dbNodeIds = new Set((dbNodes || []).map((n: any) => n.id));
+      const targetNodeIds = new Set(targetNodes.map((n: any) => n.id));
+
+      const dbDepIds = new Set((dbDeps || []).map((d: any) => d.id));
+      const targetDepIds = new Set(targetDependencies.map((d: any) => d.id));
+
+      // Items to delete
+      const nodesToDelete = (dbNodes || []).filter((n: any) => !targetNodeIds.has(n.id)).map((n: any) => n.id);
+      const depsToDelete = (dbDeps || []).filter((d: any) => !targetDepIds.has(d.id)).map((d: any) => d.id);
+
+      if (depsToDelete.length > 0) {
+        await supabase.from("plan_node_dependencies").delete().in("id", depsToDelete);
+      }
+      if (nodesToDelete.length > 0) {
+        await supabase.from("plan_nodes").delete().in("id", nodesToDelete);
+      }
+
+      // Upsert current state
+      if (targetNodes.length > 0) {
+        const cleanNodes = targetNodes.map(n => ({
+          id: n.id,
+          plan_id: n.plan_id,
+          parent_id: n.parent_id,
+          type: n.type,
+          name: n.name,
+          description: n.description,
+          status: n.status,
+          metadata: n.metadata,
+          version: n.version,
+          created_at: n.created_at,
+          updated_at: n.updated_at
+        }));
+        const { error: nodeError } = await supabase.from("plan_nodes").upsert(cleanNodes);
+        if (nodeError) throw nodeError;
+      }
+
+      if (targetDependencies.length > 0) {
+        const cleanDeps = targetDependencies.map(d => ({
+          id: d.id,
+          plan_id: d.plan_id,
+          source_node_id: d.source_node_id,
+          target_node_id: d.target_node_id,
+          dependency_type: d.dependency_type,
+          created_at: d.created_at
+        }));
+        const { error: depError } = await supabase.from("plan_node_dependencies").upsert(cleanDeps);
+        if (depError) throw depError;
+      }
+    } catch (err) {
+      console.error("Error syncing database on history change:", err);
+    }
+  };
+
+  const syncTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSyncRef = useRef<{ nodes: any[]; dependencies: any[] } | null>(null);
+
+  // Clean up sync timer on unmount
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current);
+      }
+    };
+  }, []);
+
+  const queueDatabaseSync = (targetNodes: any[], targetDependencies: any[]) => {
+    pendingSyncRef.current = { nodes: targetNodes, dependencies: targetDependencies };
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+    }
+    syncTimerRef.current = setTimeout(async () => {
+      if (pendingSyncRef.current) {
+        const { nodes: ns, dependencies: deps } = pendingSyncRef.current;
+        pendingSyncRef.current = null;
+        await syncStateToDatabase(ns, deps);
+      }
+    }, 600);
+  };
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) return;
+    const previousState = undoStack[undoStack.length - 1];
+    const newUndoStack = undoStack.slice(0, -1);
+
+    setRedoStack((prev) => [...prev, { nodes: [...nodes], dependencies: [...dependencies] }]);
+    setUndoStack(newUndoStack);
+
+    // Stop any active decomposing spinner/process immediately
+    setDecomposingMap({});
+
+    setNodes(previousState.nodes);
+    setDependencies(previousState.dependencies);
+
+    queueDatabaseSync(previousState.nodes, previousState.dependencies);
+
+    if (activeNode && !previousState.nodes.some((n: any) => n.id === activeNode.id)) {
+      setActiveNode(null);
+    }
+  };
+
+  const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const nextState = redoStack[redoStack.length - 1];
+    const newRedoStack = redoStack.slice(0, -1);
+
+    setUndoStack((prev) => [...prev, { nodes: [...nodes], dependencies: [...dependencies] }]);
+    setRedoStack(newRedoStack);
+
+    // Stop any active decomposing spinner/process immediately
+    setDecomposingMap({});
+
+    setNodes(nextState.nodes);
+    setDependencies(nextState.dependencies);
+
+    queueDatabaseSync(nextState.nodes, nextState.dependencies);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return;
+      }
+
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+      if (isCmdOrCtrl) {
+        if (e.key === "z" || e.key === "Z") {
+          e.preventDefault();
+          if (e.shiftKey) {
+            handleRedo();
+          } else {
+            handleUndo();
+          }
+        } else if (e.key === "y" || e.key === "Y") {
+          e.preventDefault();
+          handleRedo();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undoStack, redoStack, nodes, dependencies, activeNode, activePlan]);
+
   const fetchPlans = async () => {
     try {
       setLoadingPlans(true);
@@ -116,6 +275,8 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
   const handleSelectPlan = async (plan: any) => {
     setActivePlan(plan);
     setActiveNode(null);
+    setUndoStack([]);
+    setRedoStack([]);
     try {
       setLoadingDetails(true);
       
@@ -246,6 +407,9 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
       return;
     }
 
+    setUndoStack((prev) => [...prev, { nodes: [...nodes], dependencies: [...dependencies] }]);
+    setRedoStack([]);
+
     setDecomposingMap((prev) => ({ ...prev, [pageId]: true }));
     let isRetrying = false;
     try {
@@ -326,6 +490,9 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
 
   // 5. Handle node updates (called from NodeEditor)
   const handleNodeUpdated = (updatedNode: any) => {
+    setUndoStack((prev) => [...prev, { nodes: [...nodes], dependencies: [...dependencies] }]);
+    setRedoStack([]);
+
     // Update local nodes list
     setNodes((prev) => prev.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
     
@@ -366,6 +533,7 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
         user={user} 
         onSignOut={handleSignOut} 
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenCostDashboard={() => setIsCostDashboardOpen(true)}
         signOutLoading={signOutLoading}
         theme={theme}
         onToggleTheme={handleToggleTheme}
@@ -422,6 +590,8 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                 >
                   <option value="nextjs">Next.js (App Router)</option>
                   <option value="react">React (SPA Boilerplate)</option>
+                  <option value="vue">Vue (Nuxt / Atomic)</option>
+                  <option value="svelte">Svelte (SvelteKit / Atomic)</option>
                 </select>
               </div>
 
@@ -477,10 +647,22 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                     <div className="flex items-center justify-between mt-2.5 border-t border-border pt-2 text-[11px] text-zinc-600 dark:text-zinc-400 font-bold">
                       <span className="flex items-center gap-1">
                         <BookOpen className="h-3 w-3" />
-                        {p.settings?.framework === "nextjs" ? "Next.js" : "React"}
+                        {p.settings?.framework === "nextjs" 
+                          ? "Next.js" 
+                          : p.settings?.framework === "react" 
+                          ? "React" 
+                          : p.settings?.framework === "vue" 
+                          ? "Vue" 
+                          : p.settings?.framework === "svelte" 
+                          ? "Svelte" 
+                          : "Custom"}
                       </span>
                       <span>
-                        ${Number(p.total_cost || 0).toFixed(4)}
+                        {Number(p.total_cost || 0) === 0 
+                          ? "$0.00" 
+                          : Number(p.total_cost || 0) < 0.01 
+                          ? `$${Number(p.total_cost || 0).toFixed(6)}` 
+                          : `$${Number(p.total_cost || 0).toFixed(4)}`}
                       </span>
                     </div>
                   </div>
@@ -503,8 +685,34 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
+                  {/* Undo / Redo Toolbar */}
+                  <div className="flex items-center gap-1 bg-muted/40 border border-border p-1 rounded-lg">
+                    <Button
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      variant="ghost"
+                      className="h-7 w-7 p-0 rounded-md disabled:opacity-40 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="Undo (Cmd+Z)"
+                    >
+                      <Undo2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      onClick={handleRedo}
+                      disabled={redoStack.length === 0}
+                      variant="ghost"
+                      className="h-7 w-7 p-0 rounded-md disabled:opacity-40 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="Redo (Cmd+Y)"
+                    >
+                      <Redo2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+
                   <CostIndicator cost={Number(activePlan.total_cost || 0)} />
+                  <ShareButton plan={activePlan} onPlanUpdated={(updatedPlan) => {
+                    setActivePlan(updatedPlan);
+                    setPlans(prev => prev.map(p => p.id === updatedPlan.id ? updatedPlan : p));
+                  }} />
                   <ExportDropdown plan={activePlan} nodes={nodes} dependencies={dependencies} />
                 </div>
               </div>
@@ -548,6 +756,8 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
               <NodeEditor
                 node={activeNode}
                 planId={activePlan.id}
+                framework={activePlan.settings?.framework || "nextjs"}
+                readOnly={false}
                 onNodeUpdated={handleNodeUpdated}
                 onClose={() => setActiveNode(null)}
               />
@@ -573,6 +783,15 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
           fetchPlans();
         }}
       />
+
+      {/* Cost & Token Analytics Dashboard Modal */}
+      {isCostDashboardOpen && (
+        <CostDashboardModal
+          onClose={() => setIsCostDashboardOpen(false)}
+          plans={plans}
+          activePlanId={activePlan?.id || null}
+        />
+      )}
 
       {/* Re-decompose Custom Instructions Modal */}
       {redecomposeNode && (

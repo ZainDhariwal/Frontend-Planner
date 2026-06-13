@@ -83,7 +83,7 @@ export async function POST(request: Request) {
           outputs: z.string(),
           dependsOn: z.array(z.string()).default([])
         });
-        typeSpecificSystemPrompt = "You are updating a React hook. Define its input parameters, return values, and dependsOn entries.";
+        typeSpecificSystemPrompt = "You are updating a custom hook / composable. Define its input parameters, return values, and dependsOn entries.";
         break;
 
       case "context":
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
           description: z.string(),
           valueShape: z.string()
         });
-        typeSpecificSystemPrompt = "You are updating a Context Provider. Generate its state interface shape and purpose.";
+        typeSpecificSystemPrompt = "You are updating a Context Provider / Pinia Store / Svelte Store. Generate its state interface shape and purpose.";
         break;
 
       case "data_shape":
@@ -152,7 +152,7 @@ Regeneration Instruction:
 Output the updated node properties conforming to the schema.`;
 
     // 7. Call LLM using model failover chain
-    const { object, cost: generatedCost } = await generateObjectWithFallback(
+    const { object, cost: generatedCost, usage, modelUsed, keyTypeUsed } = await generateObjectWithFallback(
       provider,
       customApiKey,
       {
@@ -177,6 +177,18 @@ Output the updated node properties conforming to the schema.`;
       const currentCost = Number(currentPlan?.total_cost || 0);
       await supabase.from("plans").update({ total_cost: currentCost + generatedCost }).eq("id", planId);
     }
+
+    // 8.5 Save LLM Usage Log
+    await supabase.from("llm_usage_logs").insert({
+      plan_id: planId,
+      node_id: nodeId,
+      model_name: modelUsed || provider,
+      key_type: keyTypeUsed || "unknown",
+      input_tokens: usage?.inputTokens ?? usage?.promptTokens ?? 0,
+      output_tokens: usage?.outputTokens ?? usage?.completionTokens ?? 0,
+      cost: generatedCost,
+      action_type: "regenerate"
+    });
 
     // 9. Format metadata based on node type
     let metadata: any = {};

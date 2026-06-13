@@ -282,7 +282,8 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
   };
 
   // 2. Fetch nodes and dependencies for active plan
-  const handleSelectPlan = async (plan: any, keepActiveNode = false) => {
+  const handleSelectPlan = async (plan: any, keepActiveNode = false, silent = false) => {
+    console.log("handleSelectPlan triggered for plan:", plan);
     setActivePlan(plan);
     if (!keepActiveNode) {
       setActiveNode(null);
@@ -290,7 +291,9 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
       setRedoStack([]);
     }
     try {
-      setLoadingDetails(true);
+      if (!silent) {
+        setLoadingDetails(true);
+      }
       
       // Fetch nodes
       const { data: nodeData, error: nodeError } = await supabase
@@ -299,7 +302,12 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
         .eq("plan_id", plan.id)
         .order("created_at", { ascending: true });
 
-      if (nodeError) throw nodeError;
+      console.log("Fetched nodes count:", nodeData?.length, "data:", nodeData, "error:", nodeError);
+
+      if (nodeError) {
+        console.error("PostgrestError details for plan_nodes query:", nodeError);
+        throw nodeError;
+      }
 
       // Fetch dependencies
       const { data: depData, error: depError } = await supabase
@@ -307,7 +315,12 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
         .select("*")
         .eq("plan_id", plan.id);
 
-      if (depError) throw depError;
+      console.log("Fetched dependencies count:", depData?.length, "data:", depData, "error:", depError);
+
+      if (depError) {
+        console.error("PostgrestError details for dependencies query:", depError);
+        throw depError;
+      }
 
       setNodes(nodeData || []);
       setDependencies(depData || []);
@@ -318,8 +331,9 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
           setActiveNode(updated);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error loading plan details:", err);
+      alert(`Error loading plan details: ${err?.message || JSON.stringify(err)}`);
     } finally {
       setLoadingDetails(false);
     }
@@ -867,7 +881,7 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                   nodes={nodes}
                   onSelectNode={setActiveNode}
                   selectedNodeId={activeNode?.id || null}
-                  onRefreshWorkspace={() => handleSelectPlan(activePlan, true)}
+                  onRefreshWorkspace={() => handleSelectPlan(activePlan, true, true)}
                   readOnly={false}
                   onDeleteNode={handleDeleteNode}
                 />

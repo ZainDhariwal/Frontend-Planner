@@ -43,7 +43,16 @@ export default function CanvasBoard({
   // Dragging/Panning states
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
-  const [draggedNode, setDraggedNode] = useState<{ id: string; startX: number; startY: number; mouseStartX: number; mouseStartY: number; currentX: number; currentY: number } | null>(null);
+  const [draggedNode, setDraggedNode] = useState<{ 
+    id: string; 
+    startX: number; 
+    startY: number; 
+    mouseStartX: number; 
+    mouseStartY: number; 
+    currentX: number; 
+    currentY: number;
+    hasDragged?: boolean;
+  } | null>(null);
   const [resizingNode, setResizingNode] = useState<{ id: string; startW: number; startH: number; mouseStartX: number; mouseStartY: number; direction: "se" | "e" | "s"; startX: number; startY: number; currentW: number; currentH: number } | null>(null);
 
   // Filter page components
@@ -126,15 +135,20 @@ export default function CanvasBoard({
         setPanX(e.clientX - panStart.x);
         setPanY(e.clientY - panStart.y);
       } else if (draggedNode && !readOnly) {
-        const deltaX = (e.clientX - draggedNode.mouseStartX) / zoom;
-        const deltaY = (e.clientY - draggedNode.mouseStartY) / zoom;
+        const diffX = e.clientX - draggedNode.mouseStartX;
+        const diffY = e.clientY - draggedNode.mouseStartY;
+        const distance = Math.sqrt(diffX * diffX + diffY * diffY);
+
+        const deltaX = diffX / zoom;
+        const deltaY = diffY / zoom;
         
         setDraggedNode(prev => {
           if (!prev) return null;
           return {
             ...prev,
             currentX: Math.round(prev.startX + deltaX),
-            currentY: Math.round(prev.startY + deltaY)
+            currentY: Math.round(prev.startY + deltaY),
+            hasDragged: prev.hasDragged || distance > 4
           };
         });
       } else if (resizingNode && !readOnly) {
@@ -166,50 +180,52 @@ export default function CanvasBoard({
       if (isPanning) {
         setIsPanning(false);
       } else if (draggedNode && !readOnly) {
-        const { id, currentX, currentY } = draggedNode;
+        const { id, currentX, currentY, hasDragged } = draggedNode;
         setDraggedNode(null);
 
-        const node = canvasNodes.find(n => n.id === id);
-        if (!node) return;
+        if (hasDragged) {
+          const node = canvasNodes.find(n => n.id === id);
+          if (!node) return;
 
-        const currentW = node.metadata?.canvas?.width ?? 200;
-        const currentH = node.metadata?.canvas?.height ?? 100;
+          const currentW = node.metadata?.canvas?.width ?? 200;
+          const currentH = node.metadata?.canvas?.height ?? 100;
 
-        // 1. Save final coordinates to database once
-        onUpdateNodeCoordinates(id, currentX, currentY, currentW, currentH);
+          // 1. Save final coordinates to database once
+          onUpdateNodeCoordinates(id, currentX, currentY, currentW, currentH);
 
-        // 2. Perform Geometric Containment calculation to set parenting
-        let parentId: string | null = null;
-        let smallestParentArea = Infinity;
+          // 2. Perform Geometric Containment calculation to set parenting
+          let parentId: string | null = null;
+          let smallestParentArea = Infinity;
 
-        canvasNodes.forEach(other => {
-          if (other.id === id) return;
-          if (other.metadata?.atomicType !== "organism") return;
+          canvasNodes.forEach(other => {
+            if (other.id === id) return;
+            if (other.metadata?.atomicType !== "organism") return;
 
-          const otherX = other.metadata?.canvas?.x ?? 0;
-          const otherY = other.metadata?.canvas?.y ?? 0;
-          const otherW = other.metadata?.canvas?.width ?? 200;
-          const otherH = other.metadata?.canvas?.height ?? 100;
+            const otherX = other.metadata?.canvas?.x ?? 0;
+            const otherY = other.metadata?.canvas?.y ?? 0;
+            const otherW = other.metadata?.canvas?.width ?? 200;
+            const otherH = other.metadata?.canvas?.height ?? 100;
 
-          // Bounding containment check
-          const isContained = 
-            currentX >= otherX &&
-            currentY >= otherY &&
-            (currentX + currentW) <= (otherX + otherW) &&
-            (currentY + currentH) <= (otherY + otherH);
+            // Bounding containment check
+            const isContained = 
+              currentX >= otherX &&
+              currentY >= otherY &&
+              (currentX + currentW) <= (otherX + otherW) &&
+              (currentY + currentH) <= (otherY + otherH);
 
-          if (isContained) {
-            const area = otherW * otherH;
-            if (area < smallestParentArea) {
-              smallestParentArea = area;
-              parentId = other.id;
+            if (isContained) {
+              const area = otherW * otherH;
+              if (area < smallestParentArea) {
+                smallestParentArea = area;
+                parentId = other.id;
+              }
             }
-          }
-        });
+          });
 
-        // Fire parenting update trigger
-        if (node.parent_id !== parentId) {
-          onUpdateParent(id, parentId);
+          // Fire parenting update trigger
+          if (node.parent_id !== parentId) {
+            onUpdateParent(id, parentId);
+          }
         }
       } else if (resizingNode && !readOnly) {
         const { id, currentW, currentH, startX, startY } = resizingNode;
@@ -248,7 +264,8 @@ export default function CanvasBoard({
       mouseStartX: e.clientX,
       mouseStartY: e.clientY,
       currentX: x,
-      currentY: y
+      currentY: y,
+      hasDragged: false
     });
   };
 
@@ -297,7 +314,7 @@ export default function CanvasBoard({
         {/* Render Canvas Nodes with temporary local coordinates overrides */}
         {canvasNodes.map(node => {
           let nodeToRender = node;
-          if (draggedNode && draggedNode.id === node.id) {
+          if (draggedNode && draggedNode.id === node.id && draggedNode.hasDragged) {
             nodeToRender = {
               ...node,
               metadata: {
@@ -342,12 +359,12 @@ export default function CanvasBoard({
         {activeSelectedNode && (
           <CanvasSelection
             x={
-              draggedNode && draggedNode.id === activeSelectedNode.id 
+              draggedNode && draggedNode.id === activeSelectedNode.id && draggedNode.hasDragged
                 ? draggedNode.currentX 
                 : activeSelectedNode.metadata?.canvas?.x ?? 0
             }
             y={
-              draggedNode && draggedNode.id === activeSelectedNode.id 
+              draggedNode && draggedNode.id === activeSelectedNode.id && draggedNode.hasDragged
                 ? draggedNode.currentY 
                 : activeSelectedNode.metadata?.canvas?.y ?? 0
             }

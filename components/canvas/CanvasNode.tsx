@@ -101,7 +101,8 @@ export default function CanvasNode({
         height: `${h}px`,
         zIndex: isSelected ? 10 : (type === "organism" ? 2 : 5)
       }}
-      onClick={(e) => {
+      onMouseDown={(e) => {
+        if (e.button !== 0) return; // Only left click selects/drags
         e.stopPropagation();
         onSelect(e);
       }}
@@ -119,6 +120,7 @@ export default function CanvasNode({
               className="bg-background border border-primary px-1.5 py-0.5 rounded text-xs font-bold outline-none text-foreground w-full font-sans select-text"
               autoFocus
               onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
             />
           ) : (
             <div className="font-extrabold text-xs text-foreground truncate flex items-center gap-1.5 max-w-full">
@@ -134,6 +136,7 @@ export default function CanvasNode({
                   e.stopPropagation();
                   onDelete(e);
                 }}
+                onMouseDown={(e) => e.stopPropagation()}
                 className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded transition-all cursor-pointer"
                 title="Delete component"
               >

@@ -22,6 +22,7 @@ import PlanTreeView from "@/components/organisms/PlanTreeView";
 import NodeEditor from "@/components/organisms/NodeEditor";
 import CoherencePanel from "@/components/organisms/CoherencePanel";
 import ExportDropdown from "@/components/molecules/ExportDropdown";
+import VisualCanvas from "@/components/canvas/VisualCanvas";
 
 export default function SharedPlanPage() {
   const params = useParams();
@@ -32,6 +33,7 @@ export default function SharedPlanPage() {
   const [nodes, setNodes] = useState<any[]>([]);
   const [dependencies, setDependencies] = useState<any[]>([]);
   const [activeNode, setActiveNode] = useState<any | null>(null);
+  const [viewMode, setViewMode] = useState<"tree" | "canvas">("tree");
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +151,10 @@ export default function SharedPlanPage() {
   const pageNodes = nodes.filter(n => n.type === "page");
   const componentNodes = nodes.filter(n => n.type === "component");
   const helperNodes = nodes.filter(n => n.type !== "page" && n.type !== "component");
+  const activePageNode = activeNode?.type === "page"
+    ? activeNode
+    : (activeNode?.parent_id ? nodes.find(n => n.id === activeNode.parent_id && n.type === "page") : null)
+    || nodes.find(n => n.type === "page");
 
   return (
     <div className="flex flex-col bg-background text-foreground min-h-screen transition-colors duration-200">
@@ -206,30 +212,101 @@ export default function SharedPlanPage() {
 
       {/* Main Layout Area */}
       <div className="flex flex-1 overflow-hidden h-[calc(100vh-101px)]">
-        {/* Left Side: Plan Tree View (Scrollable) */}
-        <main className="flex-1 bg-background p-6 overflow-y-auto border-r border-border">
-          <div className="space-y-6">
-            {/* Plan Info Card */}
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-border pb-5">
-              <div className="space-y-1">
-                <h2 className="text-2xl font-bold tracking-tight text-foreground">{plan.title}</h2>
-                <p className="text-muted-foreground text-xs leading-normal max-w-2xl">
-                  {plan.settings?.briefSummary || plan.brief}
-                </p>
+        {/* Left Side: Plan Tree View / Visual Canvas */}
+        <main className={`flex-1 bg-background flex flex-col border-r border-border ${viewMode === "tree" ? "p-6 overflow-y-auto" : "p-0 overflow-hidden"}`}>
+          <div className="flex-1 flex flex-col justify-start min-h-0">
+            {/* Header section (only adds padding if in canvas mode, otherwise relies on parent p-6) */}
+            <div className={`space-y-4 shrink-0 border-b border-border pb-4 ${viewMode === "canvas" ? "p-6" : "mb-6"}`}>
+              {/* Plan Info Card */}
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground">{plan.title}</h2>
+                  <p className="text-muted-foreground text-xs leading-normal max-w-2xl">
+                    {plan.settings?.briefSummary || plan.brief}
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  <ExportDropdown plan={plan} nodes={nodes} dependencies={dependencies} />
+                </div>
               </div>
-              <div className="shrink-0">
-                <ExportDropdown plan={plan} nodes={nodes} dependencies={dependencies} />
+
+              {/* View Selector Tabs & Dropdown */}
+              <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setViewMode("tree")}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      viewMode === "tree"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
+                        : "bg-muted/40 text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    Tree View
+                  </button>
+                  <button
+                    onClick={() => setViewMode("canvas")}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      viewMode === "canvas"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
+                        : "bg-muted/40 text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    Visual Canvas
+                  </button>
+                </div>
+
+                {viewMode === "canvas" && pageNodes.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground font-semibold">Active Page:</span>
+                    <select
+                      value={activePageNode?.id || ""}
+                      onChange={(e) => {
+                        const selected = pageNodes.find(p => p.id === e.target.value);
+                        if (selected) setActiveNode(selected);
+                      }}
+                      className="border border-border bg-background rounded-lg px-2.5 py-1 text-xs outline-none cursor-pointer font-semibold text-foreground"
+                    >
+                      {pageNodes.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.metadata?.path || "/"})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Tree View */}
-            <PlanTreeView
-              planId={plan.id}
-              nodes={nodes}
-              activeNodeId={activeNode?.id || null}
-              onSelectNode={setActiveNode}
-              readOnly={true}
-            />
+            {/* Content area */}
+            {viewMode === "tree" ? (
+              <PlanTreeView
+                planId={plan.id}
+                nodes={nodes}
+                activeNodeId={activeNode?.id || null}
+                onSelectNode={setActiveNode}
+                readOnly={true}
+              />
+            ) : activePageNode ? (
+              <VisualCanvas
+                plan={plan}
+                pageNode={activePageNode}
+                nodes={nodes}
+                onSelectNode={setActiveNode}
+                selectedNodeId={activeNode?.id || null}
+                onRefreshWorkspace={() => {}}
+                readOnly={true}
+              />
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-center gap-4 py-24">
+                <div className="h-12 w-12 rounded-2xl bg-muted border border-border flex items-center justify-center text-muted-foreground">
+                  <Globe className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-foreground text-sm">No Page Routes Found</h3>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                    This shared workspace plan does not have any generated page routes.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </main>
 

@@ -16,6 +16,7 @@ An interactive, premium-designed frontend architecture orchestrator. **Frontend 
 
 - **🎯 Brief Decomposition:** Turns a raw product description into a logical Page Router architecture for React/Next.js or Svelte/Vue.
 - **⚛️ Lazy Atomic Drilling:** Recursively breaks down page route nodes into components (Atoms, Molecules, Organisms), custom Hooks/Composables, Contexts/Stores, Data Interfaces, Mock Data JSONs, and Third-Party Libs.
+- **🎨 Visual Wireframe Canvas:** Figma-style design canvas to visually plan layout hierarchies. Drag-and-drop primitives (Atoms, Molecules, Organisms), resize, rename, and let the deterministic geometric containment engine calculate parent-child boundaries. Generate visual suggestion wireframes or let the AI analyze visual layouts to enrich TypeScript interfaces, events, and mock data.
 - **🔄 Smart LLM Orchestration & Failover:**
   - Dual provider support (Google Gemini & Anthropic Claude).
   - Tries custom API keys with pro models, falls back to flash models on errors, and automatically offers to use the default system key.

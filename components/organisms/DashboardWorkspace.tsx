@@ -27,6 +27,7 @@ import ShareButton from "../molecules/ShareButton";
 import CostDashboardModal from "./CostDashboardModal";
 import { CostIndicator } from "../molecules/CostIndicator";
 import { Spinner } from "@/components/atoms/Spinner";
+import VisualCanvas from "../canvas/VisualCanvas";
 
 interface DashboardWorkspaceProps {
   user: User;
@@ -35,6 +36,7 @@ interface DashboardWorkspaceProps {
 export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
   const [plans, setPlans] = useState<any[]>([]);
   const [activePlan, setActivePlan] = useState<any | null>(null);
+  const [viewMode, setViewMode] = useState<"tree" | "canvas">("tree");
   const [nodes, setNodes] = useState<any[]>([]);
   const [dependencies, setDependencies] = useState<any[]>([]);
   
@@ -272,11 +274,13 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
   };
 
   // 2. Fetch nodes and dependencies for active plan
-  const handleSelectPlan = async (plan: any) => {
+  const handleSelectPlan = async (plan: any, keepActiveNode = false) => {
     setActivePlan(plan);
-    setActiveNode(null);
-    setUndoStack([]);
-    setRedoStack([]);
+    if (!keepActiveNode) {
+      setActiveNode(null);
+      setUndoStack([]);
+      setRedoStack([]);
+    }
     try {
       setLoadingDetails(true);
       
@@ -299,6 +303,13 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
 
       setNodes(nodeData || []);
       setDependencies(depData || []);
+
+      if (keepActiveNode && activeNode) {
+        const updated = (nodeData || []).find((n: any) => n.id === activeNode.id);
+        if (updated) {
+          setActiveNode(updated);
+        }
+      }
     } catch (err) {
       console.error("Error loading plan details:", err);
     } finally {
@@ -452,7 +463,7 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
 
       // Reload plan details to fetch all newly decomposed elements
       if (activePlan) {
-        await handleSelectPlan(activePlan);
+        await handleSelectPlan(activePlan, true);
       }
     } catch (err: any) {
       console.error("Decomposition failed:", err);
@@ -525,6 +536,12 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
       setSignOutLoading(false);
     }
   };
+
+  const pageNodes = nodes.filter(n => n.type === "page");
+  const activePageNode = activeNode?.type === "page"
+    ? activeNode
+    : (activeNode?.parent_id ? nodes.find(n => n.id === activeNode.parent_id && n.type === "page") : null)
+    || nodes.find(n => n.type === "page");
 
   return (
     <div className="flex flex-col bg-background text-foreground min-h-screen transition-colors duration-200">
@@ -673,57 +690,104 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
         </aside>
 
         {/* Middle Panel: Active Plan Tree Workspace */}
-        <main className="flex-1 bg-background p-6 overflow-y-auto flex flex-col">
+        <main className={`flex-1 bg-background flex flex-col ${viewMode === "tree" ? "p-6 overflow-y-auto" : "p-0 overflow-hidden"}`}>
           {activePlan ? (
-            <div className="space-y-6 flex-1 flex flex-col justify-start">
-              {/* Plan Information Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
-                <div>
-                  <h2 className="text-2xl font-bold tracking-tight text-foreground">{activePlan.title}</h2>
-                  <p className="text-muted-foreground text-xs mt-1 leading-normal max-w-xl">
-                    {activePlan.settings?.briefSummary || activePlan.brief}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  {/* Undo / Redo Toolbar */}
-                  <div className="flex items-center gap-1 bg-muted/40 border border-border p-1 rounded-lg">
-                    <Button
-                      onClick={handleUndo}
-                      disabled={undoStack.length === 0}
-                      variant="ghost"
-                      className="h-7 w-7 p-0 rounded-md disabled:opacity-40 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                      title="Undo (Cmd+Z)"
-                    >
-                      <Undo2 className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      onClick={handleRedo}
-                      disabled={redoStack.length === 0}
-                      variant="ghost"
-                      className="h-7 w-7 p-0 rounded-md disabled:opacity-40 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                      title="Redo (Cmd+Y)"
-                    >
-                      <Redo2 className="h-3.5 w-3.5" />
-                    </Button>
+            <div className="flex-1 flex flex-col justify-start min-h-0">
+              {/* Header block (only adds padding if in canvas mode, otherwise relies on parent p-6) */}
+              <div className={`space-y-4 shrink-0 border-b border-border pb-4 ${viewMode === "canvas" ? "p-6" : "mb-6"}`}>
+                {/* Plan Information Header */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight text-foreground">{activePlan.title}</h2>
+                    <p className="text-muted-foreground text-xs mt-1 leading-normal max-w-xl">
+                      {activePlan.settings?.briefSummary || activePlan.brief}
+                    </p>
                   </div>
 
-                  <CostIndicator cost={Number(activePlan.total_cost || 0)} />
-                  <ShareButton plan={activePlan} onPlanUpdated={(updatedPlan) => {
-                    setActivePlan(updatedPlan);
-                    setPlans(prev => prev.map(p => p.id === updatedPlan.id ? updatedPlan : p));
-                  }} />
-                  <ExportDropdown plan={activePlan} nodes={nodes} dependencies={dependencies} />
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* Undo / Redo Toolbar */}
+                    <div className="flex items-center gap-1 bg-muted/40 border border-border p-1 rounded-lg">
+                      <Button
+                        onClick={handleUndo}
+                        disabled={undoStack.length === 0}
+                        variant="ghost"
+                        className="h-7 w-7 p-0 rounded-md disabled:opacity-40 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                        title="Undo (Cmd+Z)"
+                      >
+                        <Undo2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        onClick={handleRedo}
+                        disabled={redoStack.length === 0}
+                        variant="ghost"
+                        className="h-7 w-7 p-0 rounded-md disabled:opacity-40 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                        title="Redo (Cmd+Y)"
+                      >
+                        <Redo2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+
+                    <CostIndicator cost={Number(activePlan.total_cost || 0)} />
+                    <ShareButton plan={activePlan} onPlanUpdated={(updatedPlan) => {
+                      setActivePlan(updatedPlan);
+                      setPlans(prev => prev.map(p => p.id === updatedPlan.id ? updatedPlan : p));
+                    }} />
+                    <ExportDropdown plan={activePlan} nodes={nodes} dependencies={dependencies} />
+                  </div>
+                </div>
+
+                {/* View Selector Tabs & Dropdown */}
+                <div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setViewMode("tree")}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        viewMode === "tree"
+                          ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
+                          : "bg-muted/40 text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      Tree View
+                    </button>
+                    <button
+                      onClick={() => setViewMode("canvas")}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        viewMode === "canvas"
+                          ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
+                          : "bg-muted/40 text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      Visual Canvas
+                    </button>
+                  </div>
+
+                  {viewMode === "canvas" && pageNodes.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground font-semibold">Active Page:</span>
+                      <select
+                        value={activePageNode?.id || ""}
+                        onChange={(e) => {
+                          const selected = pageNodes.find(p => p.id === e.target.value);
+                          if (selected) setActiveNode(selected);
+                        }}
+                        className="border border-border bg-background rounded-lg px-2.5 py-1 text-xs outline-none cursor-pointer font-semibold text-foreground"
+                      >
+                        {pageNodes.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} ({p.metadata?.path || "/"})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Drilldown Trees container */}
+              {/* Body Content Container */}
               {loadingDetails ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3 py-24">
                   <Spinner size="md" />
                   <span className="text-xs font-medium">Loading page nodes...</span>
                 </div>
-              ) : (
+              ) : viewMode === "tree" ? (
                 <PlanTreeView
                   planId={activePlan.id}
                   nodes={nodes}
@@ -732,6 +796,28 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                   onDecomposePage={handleDecomposePage}
                   decomposingMap={decomposingMap}
                 />
+              ) : activePageNode ? (
+                <VisualCanvas
+                  plan={activePlan}
+                  pageNode={activePageNode}
+                  nodes={nodes}
+                  onSelectNode={setActiveNode}
+                  selectedNodeId={activeNode?.id || null}
+                  onRefreshWorkspace={() => handleSelectPlan(activePlan, true)}
+                  readOnly={false}
+                />
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-center gap-4 py-24">
+                  <div className="h-12 w-12 rounded-2xl bg-muted border border-border flex items-center justify-center text-muted-foreground">
+                    <Sparkles className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-foreground text-sm">No Page Routes Found</h3>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                      Switch back to the Tree View to generate pages first before layouting them on the canvas.
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
           ) : (
